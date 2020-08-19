@@ -1,14 +1,16 @@
-import numpy as np
-import time as t
-np.set_printoptions(precision=32,suppress=False) #float precision to print
-import scipy as sc
-import numba
+import numpy as np #ALL LINEAR ALGEBRA
+import scipy as sc #FOR SPARSE MATRIX
+import numba #PARALELISM, CUNCURRENCE AND GPU
 
 
-def modu(vec):
+#CODE FOR LANCZOS TRANSFORMATION FOR SQUARE AND HEXAGONAL LATTICES
+#THE FILE PLOTS NEEDS OF ALL THE RETURNS OF LANCOZS FUNCTIONS (IF TRUE, WILL BE NECESSARY MATPLOTLIB, PANDAS AND SEABORN)
+
+
+def modu(vec): #SIMPLE FUNC TO CALCULATE VEC^2
     return(np.inner(vec,vec))
 
-def lanczos_rkky_norht(A,m=0): #a few diferent implementation of the method with any orthogonalization
+def lanczos_rkky_norht(A,m=0): #LANCZOS OF THE BELLOW PAPER, WITHOUT RE-ORTHOGONALIZATION
     #I'm fallowed the paper  https://doi.org/10.3389/fphy.2019.00067  
     if m==0:
         m=len(A)
@@ -58,11 +60,52 @@ def lanczos_rkky_norht(A,m=0): #a few diferent implementation of the method with
     B=np.eye(len(alpha))*alpha+np.eye(len(beta),k=-1)*beta[:]+np.transpose(np.eye(len(beta),k=-1)*beta[:])
     return(B,psi,A)
 
-def test_matrix(dim): #that's useful to test the code, it generates a hermitian matrix
-    alea=np.random.rand(dim,dim)
-    return (0.5*(alea+np.transpose(alea)))
+def spiral_honney(width, height): #GENERATE A SPIRAL LATTICE WITH HONEYCOMB CONFIGURATION, IN CLOCKWISE DIRECTION
+                                  #WIDTH AND HEIGHT MUST BE EQUAL AND,
+                                  # WIDTH NEED TO RESPECT THE IDEIA OF ((WIDTH-1)/4)%4)==0
+                                  
+    NORTH, S, W, E = (0, -1), (0, 1), (-1, 0), (1, 0) # directions
+    turn_right = {NORTH: E, E: S, S: W, W: NORTH} # old -> new direction
+                                                  #need's 
+    if width !=height:
+        raise ValueError
 
-def spiral(width, height): #it generates a espiral clockwise matrix
+    x, y = width // 2, height // 2 # start near the center
+    dx, dy = NORTH # initial direction
+    matrix = [[None] * width for _ in range(height)]
+    count = 0
+    antes =0 
+    while True:
+        count+=1
+        matrix[y][x] = count # visit
+        # try to turn right
+        new_dx, new_dy = turn_right[dx,dy]
+        new_x, new_y = x + new_dx, y + new_dy
+        if (0 <= new_x < width and 0 <= new_y < height and
+            matrix[new_y][new_x] is None): # can turn right
+            x, y = new_x, new_y
+            dx, dy = new_dx, new_dy
+        else: # try to move straight
+            x, y = x + dx, y + dy
+            if not (0 <= x < width and 0 <= y < height):
+                (np.array(matrix)[0:,0:]) # nowhere to go
+                break
+            
+    matrix=np.array(matrix)
+    mul=int((width/4))
+    l1=[1,0,0,1]*mul
+    l2=[0,1,1,0]*mul
+    
+    l1.append(1)
+    l2.append(0)
+    for i in range(0,height,2):
+        matrix[i,:]=matrix[i,:]*l1
+    
+    for i in range(1,height,2):
+        matrix[i,:]=matrix[i,:]*l2
+    return matrix
+def spiral(width, height): #GENERATE A WIDTH X WIDTH (WIDTH%2==1) LATTICE WITH CLOCKWISE ORIENTATION
+                            # 
     NORTH, S, W, E = (0, -1), (0, 1), (-1, 0), (1, 0) # directions
     turn_right = {NORTH: E, E: S, S: W, W: NORTH} # old -> new direction
                                                   #need's 
@@ -87,41 +130,49 @@ def spiral(width, height): #it generates a espiral clockwise matrix
             x, y = x + dx, y + dy
             if not (0 <= x < width and 0 <= y < height):
                 return (np.array(matrix)[0:,0:]) # nowhere to go
+    
+    
+    
+    
+def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTONIAN (FIRST HOPPING ONLY)
+    
+    #matriz=np.round(0.5+matriz/2,0) #I'm excluding the non-zeros points of the count
+    vec=np.transpose(np.nonzero(matriz))
+    num_elem=int(matriz.max())
+    matriz=np.array(matriz,dtype=np.int64)
+    shape_real=np.shape(matriz)[0]
+    #print(vec)
+    hamil=np.zeros((num_elem+2,num_elem+2))
+    
+    matriz=np.c_[np.zeros(len(matriz)),matriz,np.zeros(len(matriz))]
+    
+    matriz=np.r_[[np.zeros(len(matriz[0,:]))],matriz,[np.zeros(len(matriz[0,:]))]]
+    
+    vec=np.transpose(np.nonzero(matriz))
+    
+    t=1.0 #hopping
+    #return matriz
+    
 
-
-def honney(x,y): #y must to be something like 2*n+1, where 'n' is the number of unity cells
-    
-    l=[[],[]]
-    l[0].append([0,1,1,0]*x) #rows
-    l[1].append([1,0,0,1]*x)
-
-    
-    phy_bas=np.zeros((y,len(l[0][0])))
-    
-    #print((l[0][0]))
-    #print((l[1][0]))
-    
-    phy_bas[0,:]=l[0][0]
-    for i in range(1,y,2):
-        phy_bas[i,:]=l[1][0]
-        phy_bas[i+1,:]=l[0][0]
+    for i in range(int(num_elem/2)):
+        lin=vec[i][0]
+        col=vec[i][1]
+        val=int(matriz[lin,col])
         
-    print(phy_bas)
-    mem=1 #auxiliar number no index the lattice
-    for i in range(y):
-        for j in range(len(l[1][0])):
-            if phy_bas[i,j]!=0:
-                phy_bas[i,j]=mem
-                mem+=1
-    return phy_bas,mem #return the matrix and the number of elements in the system
-
-
-
-def hamiltonian_honney(matriz,num_ele): #matrix and number of elements
-    hamil=np.zeros((num_ele,num_ele))
+        hopps=matriz[lin-1:lin+2,col-1:col+2]
+        aft=int(hopps[1,2])
+        dia_sup=int(hopps[0,2])
+        dia_inf=int(hopps[2,2])
+        
+        hamil[val,aft]=t
+        hamil[val,dia_inf]=t
+        hamil[val,dia_sup]=t
     
-
-def hamiltonian_square(matriz): #transform the abose matrix into the hamiltonian with dim=width*height
+    hamil=hamil[1:-1,1:-1]
+    hamil=hamil+np.transpose(hamil)
+    return hamil
+        
+def hamiltonian_square(matriz): #TRANSFORM THE SQUARE LATTICE INTO A HAMILTONIAN (FIRST HOPPING ONLY)
     base=len(matriz)**2
     hopp=np.zeros((base+1,base+1))
     t=1.0 #hopp energy
@@ -161,90 +212,48 @@ def hamiltonian_square(matriz): #transform the abose matrix into the hamiltonian
 
 
 
-a=honney(3,3)
+spi=spiral_honney(41,41) # GENERATE THE LATTICE
+ham=hamiltonian_honney(spi) #TRANSFORM INTO A HAMILTONIAN
+a,b,c=lanczos_rkky_norht(ham) #MAKES LANCZOS TRANSFORMATION 
+PLOTS=False #DO YOU TO PLOT?
+SAVE_DATA=True
+
+if SAVE_DATA:
+    np.savetxt('lanczos_coeffs.dat',a)
+    
+    np.savetxt('lanczos_psis.dat',b)
+    
+    np.savetxt('hamiltonian_utilized.dat',c)
 
 
 
+if PLOTS:
+    import seaborn as sea
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    
+    plt.clf()
+    
+    plt.subplot(221)
+    plt.title(r"Lanczos Basis $\psi's$")
+    sea.heatmap(pd.DataFrame(b),cmap='hot',annot=False)
+    
+    plt.subplot(211)
+    plt.title(r"Coefficients directly from Lanczos Algorithm")
+    
+    sea.heatmap(pd.DataFrame(a),cmap='hot',annot=False)
+    
+    plt.subplot(223)
+    plt.title(r"$\psi^{\dagger }H\psi$")
+    sea.heatmap(np.dot(np.transpose(b),np.dot(c,b)),cmap='hot',annot=False)
+    
+    
+    plt.subplot(224)
+    plt.title(r"$\psi^{\dagger }\psi$")
+    sea.heatmap(np.dot(np.transpose(b),b),cmap='coolwarm',annot=False)
+    
+    
+    plt.tight_layout()
+    plt.savefig('results.pdf')
+    
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-'''
-t0=t.time()
-var=11
-spi=spiral(var,var)
-h=hamiltonian2(spi)
-print(t.time()-t0)
-
-t0=t.time()
-a,b,c=lanczos_rkky_norht(h)
-print(t.time()-t0)
-
-
-import seaborn as sea
-import pandas as pd
-import matplotlib.pyplot as plt
-
-#q=np.dot(np.transpose(b),b)
-
-
-plt.clf()
-
-plt.subplot(221)
-plt.title(r"Lanczos Basis $\psi's$")
-sea.heatmap(pd.DataFrame(b),cmap='hot',annot=False)
-
-plt.subplot(211)
-plt.title(r"Coefficients directly from Lanczos Algorithm")
-
-sea.heatmap(pd.DataFrame(a),cmap='hot',annot=False)
-
-plt.subplot(223)
-plt.title(r"$\psi^{\dagger }H\psi$")
-sea.heatmap(np.dot(np.transpose(b),np.dot(c,b)),cmap='hot',annot=False)
-
-
-plt.subplot(224)
-plt.title(r"$\psi^{\dagger }\psi$")
-sea.heatmap(np.dot(np.transpose(b),b),cmap='coolwarm',annot=False)
-
-
-plt.tight_layout()
-plt.savefig('results.pdf')
-'''
