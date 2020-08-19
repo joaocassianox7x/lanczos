@@ -20,4 +20,4 @@ Currently the code works fine with PyPy (ignoring the matplolib and pandas part,
 In the end of the code, the data uses Matplotlib and Pandas do show the matrices, eventualy it will become a new .py file, but by now, it works fine for our prouposes;
 I'll also add numba and MPI in the future for most speed (PyPy will not work with this both);
 
-Also, with SWIG I'm working in a C++->Python wrapper to make the Hamiltonian generation faster;
+Also, with SWIG I'm working in a C++->Python wrapper to make the Hamiltonian generation faster (these are the cwpp.py cwpp.i and generate.sh files);
