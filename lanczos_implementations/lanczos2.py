@@ -1,7 +1,7 @@
 import numpy as np #ALL LINEAR ALGEBRA
 import scipy as sc #FOR SPARSE MATRIX
 import numba #PARALELISM, CUNCURRENCE AND GPU
-
+import time as t
 
 #CODE FOR LANCZOS TRANSFORMATION FOR SQUARE AND HEXAGONAL LATTICES
 #THE FILE PLOTS NEEDS OF ALL THE RETURNS OF LANCOZS FUNCTIONS (IF TRUE, WILL BE NECESSARY MATPLOTLIB, PANDAS AND SEABORN)
@@ -12,6 +12,7 @@ def modu(vec): #SIMPLE FUNC TO CALCULATE VEC^2
 
 def lanczos_rkky_norht(A,m=0): #LANCZOS OF THE BELLOW PAPER, WITHOUT RE-ORTHOGONALIZATION
     #I'm fallowed the paper  https://doi.org/10.3389/fphy.2019.00067  
+    #Here our hamiltoninan don't have orbital energy, so alpha_n=0
     if m==0:
         m=len(A)
 
@@ -28,7 +29,7 @@ def lanczos_rkky_norht(A,m=0): #LANCZOS OF THE BELLOW PAPER, WITHOUT RE-ORTHOGON
     psi[:,0]=seed #seed
     
     #first step
-    alpha[0]=np.dot(np.dot(np.conj(psi[:,0]),A),psi[:,0])/modu(psi[:,0]) #alpha_0
+    alpha[0]=0 #np.dot(np.dot(np.conj(psi[:,0]),A),psi[:,0])/modu(psi[:,0]) #alpha_0
     psi[:,1]=np.dot(A,psi[:,0])-alpha[0]*psi[:,0] #psi_{n+1}
     beta[0]=.0
     beta[1]=(np.linalg.norm(psi[:,1])**2)/modu(psi[:,0]) #beta_1
@@ -39,7 +40,7 @@ def lanczos_rkky_norht(A,m=0): #LANCZOS OF THE BELLOW PAPER, WITHOUT RE-ORTHOGON
         
         
         beta[i]=modu(psi[:,i])/modu(psi[:,i-1])
-        alpha[i]=np.dot(np.dot(np.transpose(psi[:,i]),A),psi[:,i])/modu(psi[:,i])
+        alpha[i]=0 #np.dot(np.dot(np.transpose(psi[:,i]),A),psi[:,i])/modu(psi[:,i])
      
         for j in range(i): #gram-schmidt orthogonalization
             psi[:,i]=psi[:,i]-(np.inner(psi[:,i],psi[:,j])/modu(psi[:,j]))*psi[:,j]
@@ -48,8 +49,6 @@ def lanczos_rkky_norht(A,m=0): #LANCZOS OF THE BELLOW PAPER, WITHOUT RE-ORTHOGON
 
     for i in range(interactions):
         psi[:,i]=psi[:,i]/np.linalg.norm(psi[:,i])
-
-
 
     beta=np.sqrt(beta) #that's a problem of np.eye*b
     aux=np.zeros(len(beta)) #I'm just fixing that with this auxiliar vector
@@ -142,11 +141,15 @@ def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTO
     matriz=np.array(matriz,dtype=np.int64)
     shape_real=np.shape(matriz)[0]
     #print(vec)
+    
+    
+    
     hamil=np.zeros((num_elem+2,num_elem+2))
     
     matriz=np.c_[np.zeros(len(matriz)),matriz,np.zeros(len(matriz))]
     
     matriz=np.r_[[np.zeros(len(matriz[0,:]))],matriz,[np.zeros(len(matriz[0,:]))]]
+    
     
     vec=np.transpose(np.nonzero(matriz))
     
@@ -210,14 +213,13 @@ def hamiltonian_square(matriz): #TRANSFORM THE SQUARE LATTICE INTO A HAMILTONIAN
     hopp=hopp+np.transpose(hopp)
     return hopp
 
-
-
-spi=spiral_honney(41,41) # GENERATE THE LATTICE
+t0=t.time()
+spi=spiral_honney(81,81) # GENERATE THE LATTICE
 ham=hamiltonian_honney(spi) #TRANSFORM INTO A HAMILTONIAN
 a,b,c=lanczos_rkky_norht(ham) #MAKES LANCZOS TRANSFORMATION 
 PLOTS=False #DO YOU TO PLOT?
 SAVE_DATA=True
-
+print(t.time()-t0)
 if SAVE_DATA:
     np.savetxt('lanczos_coeffs.dat',a)
     
