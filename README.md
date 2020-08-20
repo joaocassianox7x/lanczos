@@ -14,7 +14,7 @@ Currently the code is all write in functions forms, but enventually I'll add som
 
 # lanczos_sparse_matrix.py 
 
-It's cuncurrently to the above one, but with the time my plan is add sparse matrix with SciPy framework to the program be able to work with bigger matrices.
+It's cuncurrently to the above one, but with the time my plan is add sparse matrix with SciPy framework to the program be able to work with bigger matrices. Everything here works fine (like lanczos2) but for small cases is better use lanczos2 (it's considerable faster), for large systems use this one. It's also fast, but slower than the above one.
 
 # Comentaries
 
@@ -24,3 +24,5 @@ In the end of the code, the data uses Matplotlib and Pandas do show the matrices
 I'll also add numba and MPI in the future for most speed (PyPy will not work with this both);
 
 Also, with SWIG I'm working in a C++->Python wrapper to make the Hamiltonian generation faster (these are the cwpp.py cwpp.i and generate.sh files);
+
+We are using single orbitals, so to speedup the code we make alpha_n=0 for all n. That improves the code execution in 30%.
