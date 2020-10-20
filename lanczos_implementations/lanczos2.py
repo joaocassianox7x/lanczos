@@ -8,9 +8,92 @@ import time as t
 
 
 def modu(vec): #SIMPLE FUNC TO CALCULATE VEC^2
-    return(np.inner(vec,vec))
+    return(np.inner(vec,vec)) #vec.vec -> x^2 + y^2 + z^2
 
-def lanczos_rkky_norht(A,m=0): #LANCZOS OF THE BELLOW PAPER, WITHOUT RE-ORTHOGONALIZATION
+
+def bracket(a,b,c): #A^{\dagger} . b .A
+    return(np.inner(np.transpose(np.conj(a)),np.dot(b,c))) #EXPECTED VALUE FROM QUANTUM MECHANICS
+
+
+def lanczos_sys_sol(A,m=0): #SOLVES THE LINEAR PROBLEM FROM MATRIX MANIPULATION
+        #it's the same method on https://www.bing.com/search?q=Kondo+versus+indirect+exchange%3A+Role+of+lattice+and+actual+range+of+RKKY+interactions+in+real+materials&FORM=ANCMS9&PC=U531
+    if m==0:
+        m=len(A)
+    
+    lb=int(np.sqrt(m)**2-4*np.sqrt(m)+4) #lanczos base dim
+    interactions=int((np.sqrt(m)-1)/2) #number of interactions 
+     
+    
+    #columns vectors
+    alpha=np.zeros((m,interactions),dtype=np.complex64) #alphas vectors
+    beta=np.zeros((m,interactions),dtype=np.complex64) #betas...
+
+    #where is the seed?
+    sed1 = 25 #first one
+    sed2 = 35 #second seed
+    
+    aux1 = np.zeros(m)
+    aux1[sed1] = 1 
+    
+    aux2 = np.zeros(m)
+    aux2[sed2] = 1
+    
+    alpha[:,0] = aux1 #firt seed 
+    beta[:,0] = aux2 #second seed 
+    
+
+    a=np.zeros((interactions,2,2),dtype=np.complex64) # "A" MATRICES FROM BLOCK-DIAGONAL PART 
+    b=np.zeros((interactions,2,2),dtype=np.complex64) # "B" MATRICES FROM NON-BLOCK-DIAGONAL PART
+
+
+
+    #STEPS ZERO AND ONE, BECAUSE LANCZOS METHODS NEEDS "N" AND "N-1" TO DISCOVER "N+1"
+    a[0,:,:] = np.array(([bracket(alpha[:,0],A,alpha[:,0]),bracket(beta[:,0],A,alpha[:,0])],[bracket(alpha[:,0],A,beta[:,0]),bracket(beta[:,0],A,beta[:,0])]))@np.linalg.inv(np.array(([modu(alpha[:,0]),np.inner(beta[:,0],alpha[:,0])],[np.inner(beta[:,0],alpha[:,0]),modu(beta[:,0])])))
+    
+    alpha[:,1] = A@alpha[:,0] - a[0,0,0]*alpha[:,0] - a[0,1,0]*beta[:,0]
+    beta[:,1] = A@beta[:,0] - a[0,1,1]*beta[:,0] - a[0,0,1]*alpha[:,0]
+
+    
+    a[1,:,:] = np.array(([bracket(alpha[:,1],A,alpha[:,1]),bracket(beta[:,1],A,alpha[:,1])],[bracket(alpha[:,1],A,beta[:,1]),bracket(beta[:,1],A,beta[:,1])]))@np.linalg.inv(np.array(([modu(alpha[:,1]),np.inner(beta[:,1],alpha[:,1])],[np.inner(beta[:,1],alpha[:,1]),modu(beta[:,1])])))
+    b[1,:,:] = np.array(([bracket(alpha[:,1-1], A, alpha[:,1]),bracket(beta[:,1-1],A,alpha[:,1])],[bracket(alpha[:,1-1],A,beta[:,1]),bracket(beta[:,1-1], A, beta[:,1])]))@np.linalg.inv(np.array(([modu(alpha[:,1-1]),np.inner(beta[:,1-1],alpha[:,1-1])],[np.inner(alpha[:,1-1],beta[:,1-1]),
+                                                                                                                                                                                                                                                            modu(beta[:,1-1])])))
+    
+
+
+    alpha[:,2] = A@alpha[:,1] - a[1,0,0]*alpha[:,1] - a[1,1,0]*beta[:,1] - b[1,0,0]*alpha[:,0] - b[1,0,1]*beta[:,0]
+    beta[:,2] = A@beta[:,1] - a[1,1,1]*beta[:,1] - a[1,0,1]*alpha[:,1]- b[1,1,1]*beta[:,0] - b[1,1,0]*alpha[:,0]
+    
+    
+    
+    for i in range(2,interactions-1):
+        
+        a[i,:,:] = np.array(([bracket(alpha[:,i],A,alpha[:,i]),bracket(beta[:,i],A,alpha[:,i])],[bracket(alpha[:,i],A,beta[:,i]),bracket(beta[:,i],A,beta[:,i])]))@np.linalg.inv(np.array(([modu(alpha[:,i]),np.inner(beta[:,i],alpha[:,i])],[np.inner(beta[:,i],alpha[:,i]),modu(beta[:,i])])))
+        b[i,:,:] = np.array(([bracket(alpha[:,i-1], A, alpha[:,i]),bracket(beta[:,i-1],A,alpha[:,i])],[bracket(alpha[:,i-1],A,beta[:,i]),bracket(beta[:,i-1], A, beta[:,i])]))@np.linalg.inv(np.array(([modu(alpha[:,i-1]),np.inner(beta[:,i-1],alpha[:,i-1])],[np.inner(alpha[:,i-1],beta[:,i-1]),modu(beta[:,i-1])])))
+    
+    
+        alpha[:,i+1] = A@alpha[:,i] - a[i,0,0]*alpha[:,i] - a[i,1,0]*beta[:,i] - b[i,0,0]*alpha[:,i-1] - b[i,0,1]*beta[:,i-1]
+        beta[:,i+1] = A@beta[:,i] - a[i,1,1]*beta[:,i] - a[i,0,1]*alpha[:,i]- b[i,1,1]*beta[:,i-1] - b[i,1,0]*alpha[:,i-1]
+        
+    for i in range(interactions):
+        alpha[:,i] = alpha[:,i]/np.sqrt(modu(alpha[:,i]))
+        beta[:,i] = beta[:,i]/np.sqrt(modu(beta[:,i]))
+        
+        beta[:,i] = beta[:,i] - (np.inner(beta[:,i],alpha[:,i])/modu(alpha[:,i]))*alpha[:,i]
+    
+    
+    data=np.zeros((interactions,4),dtype=np.complex)
+    data[1:,0] = np.diag(np.transpose(np.conj(alpha))@A@alpha,k=1)
+    data[1:,1] = np.diag(np.transpose(np.conj(alpha))@A@alpha,k=-1)
+    data[:,2] = np.diag(np.transpose(np.conj(alpha))@A@beta,k=0)
+    data[:,3] = -1*np.diag(np.transpose(np.conj(beta))@A@alpha,k=0)
+    np.savetxt("output/"+str(sed1)+"_"+str(sed2)+"__data_real.dat",np.real(data),fmt='%+.14f',header = "b++             b+-               a++               a+-")
+    np.savetxt("output/"+str(sed1)+"_"+str(sed2)+"__data_imag.dat",np.imag(data),fmt='%+.14f',header = "b++             b+-               a++               a+-")
+
+    return(alpha,beta,a,b)
+
+
+def lanczos_rkky_norht(A,m=0): #LANCZOS OF THE BELLOW PAPER, WITHOUT RE-ORTHOGONALIZATION 
+#ONE SEED
     #I'm fallowed the paper  https://doi.org/10.3389/fphy.2019.00067  
     #Here our hamiltoninan don't have orbital energy, so alpha_n=0
     if m==0:
@@ -29,7 +112,7 @@ def lanczos_rkky_norht(A,m=0): #LANCZOS OF THE BELLOW PAPER, WITHOUT RE-ORTHOGON
     psi[:,0]=seed #seed
     
     #first step
-    alpha[0]=0 #np.dot(np.dot(np.conj(psi[:,0]),A),psi[:,0])/modu(psi[:,0]) #alpha_0
+    alpha[0]=0. #np.dot(np.dot(np.conj(psi[:,0]),A),psi[:,0])/modu(psi[:,0]) #alpha_0
     psi[:,1]=np.dot(A,psi[:,0])-alpha[0]*psi[:,0] #psi_{n+1}
     beta[0]=.0
     beta[1]=(np.linalg.norm(psi[:,1])**2)/modu(psi[:,0]) #beta_1
@@ -103,6 +186,7 @@ def spiral_honney(width, height): #GENERATE A SPIRAL LATTICE WITH HONEYCOMB CONF
     for i in range(1,height,2):
         matrix[i,:]=matrix[i,:]*l2
     return matrix
+
 def spiral(width, height): #GENERATE A WIDTH X WIDTH (WIDTH%2==1) LATTICE WITH CLOCKWISE ORIENTATION
                             # 
     NORTH, S, W, E = (0, -1), (0, 1), (-1, 0), (1, 0) # directions
@@ -135,8 +219,6 @@ def spiral(width, height): #GENERATE A WIDTH X WIDTH (WIDTH%2==1) LATTICE WITH C
     
 def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTONIAN (FIRST HOPPING ONLY)
     
-    #matriz=np.round(0.5+matriz/2,0) #I'm excluding the non-zeros points of the count
-    vec=np.transpose(np.nonzero(matriz))
     num_elem=int(matriz.max())
     matriz=np.array(matriz,dtype=np.int64)
     shape_real=np.shape(matriz)[0]
@@ -144,24 +226,28 @@ def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTO
     
     
     
-    hamil=np.zeros((num_elem+2,num_elem+2))
+    hamil=np.zeros((num_elem+1,num_elem+1),dtype=np.complex)
     
     matriz=np.c_[np.zeros(len(matriz)),matriz,np.zeros(len(matriz))]
-    
     matriz=np.r_[[np.zeros(len(matriz[0,:]))],matriz,[np.zeros(len(matriz[0,:]))]]
     
+    matriz=np.c_[np.zeros(len(matriz)),matriz,np.zeros(len(matriz))]
+    matriz=np.r_[[np.zeros(len(matriz[0,:]))],matriz,[np.zeros(len(matriz[0,:]))]]
+        
     
+    locs = np.zeros((int(num_elem/2)+1,3))
     vec=np.transpose(np.nonzero(matriz))
-    
     t=1.0 #hopping
-    #return matriz
-    
-
-    for i in range(int(num_elem/2)):
+    st =0.1j #second hopping
+    #return matrix
+    for i in range(int(num_elem/2)+1):
         lin=vec[i][0]
         col=vec[i][1]
         val=int(matriz[lin,col])
-        
+        locs[i,0] = val
+        locs[i,1] = lin
+        locs[i,2] = col
+                
         hopps=matriz[lin-1:lin+2,col-1:col+2]
         aft=int(hopps[1,2])
         dia_sup=int(hopps[0,2])
@@ -171,8 +257,36 @@ def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTO
         hamil[val,dia_inf]=t
         hamil[val,dia_sup]=t
     
-    hamil=hamil[1:-1,1:-1]
-    hamil=hamil+np.transpose(hamil)
+    for i in range(int(num_elem/2)+1):
+        
+        lin=vec[i][0]
+        col=vec[i][1]
+        val=int(matriz[lin,col])        
+
+        shopps=matriz[lin-2:lin+3,col-2:col+3]
+        
+        Aabove_above=int(shopps[0,2])
+        Aabove_rigt=int(shopps[1,-1])
+        Abelow_right=int(shopps[3,-1])
+        
+        Babove_above=int(shopps[0,1])
+        Babove_rigt=int(shopps[1,3])
+        Bbelow_right=int(shopps[3,3])
+        
+        hamil[val,Aabove_above]=st
+        hamil[val,Aabove_rigt]=st
+        hamil[val,Abelow_right]=-st
+        
+        
+        #hamil[val,Babove_above]=st
+        #hamil[val,Babove_rigt]=st
+        #hamil[val,Bbelow_right]=-st
+
+        
+        
+    #hamil=hamil[1:-1,1:-1]
+    np.savetxt("localizacao.txt",locs)
+    hamil=hamil+np.transpose(np.conj(hamil))
     return hamil
         
 def hamiltonian_square(matriz): #TRANSFORM THE SQUARE LATTICE INTO A HAMILTONIAN (FIRST HOPPING ONLY)
@@ -181,7 +295,6 @@ def hamiltonian_square(matriz): #TRANSFORM THE SQUARE LATTICE INTO A HAMILTONIAN
     t=1.0 #hopp energy
     
     matriz=np.c_[np.zeros(len(matriz)),matriz,np.zeros(len(matriz))]
-    
     matriz=np.r_[[np.zeros(len(matriz[0,:]))],matriz,[np.zeros(len(matriz[0,:]))]]
     
     
@@ -209,53 +322,12 @@ def hamiltonian_square(matriz): #TRANSFORM THE SQUARE LATTICE INTO A HAMILTONIAN
         hopp[i,i+1:]=0
     
     
-    hopp=hopp[:-1,1:]
-    hopp=hopp+np.transpose(hopp)
+    hopp=hopp[:-1,:-1]
+    hopp=hopp[0:,0:]
+    
+    hopp=hopp+np.transpose(np.conj(hopp))
     return hopp
 
-t0=t.time()
-spi=spiral_honney(81,81) # GENERATE THE LATTICE
+spi=spiral_honney(21,21) # GENERATE THE LATTICE
 ham=hamiltonian_honney(spi) #TRANSFORM INTO A HAMILTONIAN
-a,b,c=lanczos_rkky_norht(ham) #MAKES LANCZOS TRANSFORMATION 
-PLOTS=False #DO YOU TO PLOT?
-SAVE_DATA=True
-print(t.time()-t0)
-if SAVE_DATA:
-    np.savetxt('lanczos_coeffs.dat',a)
-    
-    np.savetxt('lanczos_psis.dat',b)
-    
-    np.savetxt('hamiltonian_utilized.dat',c)
-
-
-
-if PLOTS:
-    import seaborn as sea
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    
-    plt.clf()
-    
-    plt.subplot(221)
-    plt.title(r"Lanczos Basis $\psi's$")
-    sea.heatmap(pd.DataFrame(b),cmap='hot',annot=False)
-    
-    plt.subplot(211)
-    plt.title(r"Coefficients directly from Lanczos Algorithm")
-    
-    sea.heatmap(pd.DataFrame(a),cmap='hot',annot=False)
-    
-    plt.subplot(223)
-    plt.title(r"$\psi^{\dagger }H\psi$")
-    sea.heatmap(np.dot(np.transpose(b),np.dot(c,b)),cmap='hot',annot=False)
-    
-    
-    plt.subplot(224)
-    plt.title(r"$\psi^{\dagger }\psi$")
-    sea.heatmap(np.dot(np.transpose(b),b),cmap='coolwarm',annot=False)
-    
-    
-    plt.tight_layout()
-    plt.savefig('results.pdf')
-    
-
+lanczos_sys_sol(ham)
