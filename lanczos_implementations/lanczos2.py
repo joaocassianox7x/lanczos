@@ -29,8 +29,8 @@ def lanczos_sys_sol(A,m=0): #SOLVES THE LINEAR PROBLEM FROM MATRIX MANIPULATION
     beta=np.zeros((m,interactions),dtype=np.complex64) #betas...
 
     #where is the seed?
-    sed1 = 25 #first one
-    sed2 = 35 #second seed
+    sed1 = 9 #first one
+    sed2 = 152 #second seed
     
     aux1 = np.zeros(m)
     aux1[sed1] = 1 
@@ -185,6 +185,7 @@ def spiral_honney(width, height): #GENERATE A SPIRAL LATTICE WITH HONEYCOMB CONF
     
     for i in range(1,height,2):
         matrix[i,:]=matrix[i,:]*l2
+    
     return matrix
 
 def spiral(width, height): #GENERATE A WIDTH X WIDTH (WIDTH%2==1) LATTICE WITH CLOCKWISE ORIENTATION
@@ -235,10 +236,10 @@ def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTO
     matriz=np.r_[[np.zeros(len(matriz[0,:]))],matriz,[np.zeros(len(matriz[0,:]))]]
         
     
-    locs = np.zeros((int(num_elem/2)+1,3))
+    locs = np.zeros((int(num_elem/2)+1,3),dtype=np.int64)
     vec=np.transpose(np.nonzero(matriz))
     t=1.0 #hopping
-    st =0.1j #second hopping
+    st_mod =0.1j*1/(3*np.sqrt(3)) #second hopping
     #return matrix
     for i in range(int(num_elem/2)+1):
         lin=vec[i][0]
@@ -257,35 +258,76 @@ def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTO
         hamil[val,dia_inf]=t
         hamil[val,dia_sup]=t
     
+    
+    count=0
     for i in range(int(num_elem/2)+1):
         
         lin=vec[i][0]
         col=vec[i][1]
         val=int(matriz[lin,col])        
-
-        shopps=matriz[lin-2:lin+3,col-2:col+3]
         
-        Aabove_above=int(shopps[0,2])
-        Aabove_rigt=int(shopps[1,-1])
-        Abelow_right=int(shopps[3,-1])
-        
-        Babove_above=int(shopps[0,1])
-        Babove_rigt=int(shopps[1,3])
-        Bbelow_right=int(shopps[3,3])
-        
-        hamil[val,Aabove_above]=st
-        hamil[val,Aabove_rigt]=st
-        hamil[val,Abelow_right]=-st
+        if count%2!=0:
+            shopps=matriz[lin-2:lin+3,col-2:col+3]
+            
+            st = st_mod
+            Aabove_above=int(shopps[0,2])
+            Aabove_rigt=int(shopps[1,-1])
+            Abelow_right=int(shopps[3,-1])
+            Aabove_left=int(shopps[1,0])
+            Abelow_left=int(shopps[3,0])
+            Abelow_below=int(shopps[-1,2])
         
         
-        #hamil[val,Babove_above]=st
-        #hamil[val,Babove_rigt]=st
-        #hamil[val,Bbelow_right]=-st
-
+            if val==2:
+                print(Aabove_above,Aabove_rigt,Abelow_right,Aabove_left,Abelow_left,Abelow_below)
+                print(shopps)
+                
+            if Aabove_above!=0:
+                hamil[val,Aabove_above]=st
+            if Aabove_rigt!=0:
+                hamil[val,Aabove_rigt]=-st
+            if Abelow_right!=0:
+                hamil[val,Abelow_right]=+st
+            if Aabove_left!=0:
+                hamil[val,Aabove_left]=-st
+            if Abelow_left!=0:
+                hamil[val,Abelow_left]=+st
+            if Abelow_below!=0:
+                hamil[val,Abelow_below]=-st
+                
+                
+        else:
+            shopps=matriz[lin-2:lin+3,col-2:col+3]
+            
+            st = st_mod
+            Aabove_above=int(shopps[0,2])
+            Aabove_rigt=int(shopps[1,-1])
+            Abelow_right=int(shopps[3,-1])
+            Aabove_left=int(shopps[1,0])
+            Abelow_left=int(shopps[3,0])
+            Abelow_below=int(shopps[-1,2])
         
+            
+            if val==11:
+                print(Aabove_above,Aabove_rigt,Abelow_right,Aabove_left,Abelow_left,Abelow_below)
+                print(shopps)
+                
+            if Aabove_above!=0:
+                hamil[val,Aabove_above]=-st
+            if Aabove_rigt!=0:
+                hamil[val,Aabove_rigt]=+st
+            if Abelow_right!=0:
+                hamil[val,Abelow_right]=-st
+            if Aabove_left!=0:
+                hamil[val,Aabove_left]=st
+            if Abelow_left!=0:
+                hamil[val,Abelow_left]=-st
+            if Abelow_below!=0:
+                hamil[val,Abelow_below]=+st
+        count+=1    
         
-    #hamil=hamil[1:-1,1:-1]
-    np.savetxt("localizacao.txt",locs)
+    hamil=np.triu(hamil,k=0)
+    np.savetxt("localizacao.txt",locs,fmt='%+8s')
     hamil=hamil+np.transpose(np.conj(hamil))
     return hamil
         
@@ -328,6 +370,11 @@ def hamiltonian_square(matriz): #TRANSFORM THE SQUARE LATTICE INTO A HAMILTONIAN
     hopp=hopp+np.transpose(np.conj(hopp))
     return hopp
 
-spi=spiral_honney(21,21) # GENERATE THE LATTICE
+spi=spiral_honney(5,5) # GENERATE THE LATTICE
 ham=hamiltonian_honney(spi) #TRANSFORM INTO A HAMILTONIAN
-lanczos_sys_sol(ham)
+
+
+
+
+
+
