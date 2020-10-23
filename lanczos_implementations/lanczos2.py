@@ -14,6 +14,12 @@ def modu(vec): #SIMPLE FUNC TO CALCULATE VEC^2
 def bracket(a,b,c): #A^{\dagger} . b .A
     return(np.inner(np.transpose(np.conj(a)),np.dot(b,c))) #EXPECTED VALUE FROM QUANTUM MECHANICS
 
+def matrix_non_zeros(M):    
+    idx = np.argwhere(np.all(ham[..., :] == 0, axis=0))
+    a2 = np.delete(ham, idx, axis=1)
+    idx = np.argwhere(np.all(ham[..., :] == 0, axis=1))
+    a3 = np.delete(a2, idx, axis=0)
+    return a3
 
 def lanczos_sys_sol(A,m=0): #SOLVES THE LINEAR PROBLEM FROM MATRIX MANIPULATION
         #it's the same method on https://www.bing.com/search?q=Kondo+versus+indirect+exchange%3A+Role+of+lattice+and+actual+range+of+RKKY+interactions+in+real+materials&FORM=ANCMS9&PC=U531
@@ -29,8 +35,8 @@ def lanczos_sys_sol(A,m=0): #SOLVES THE LINEAR PROBLEM FROM MATRIX MANIPULATION
     beta=np.zeros((m,interactions),dtype=np.complex64) #betas...
 
     #where is the seed?
-    sed1 = 9 #first one
-    sed2 = 152 #second seed
+    sed1 = 0 #first one
+    sed2 = 5 #second seed
     
     aux1 = np.zeros(m)
     aux1[sed1] = 1 
@@ -173,20 +179,49 @@ def spiral_honney(width, height): #GENERATE A SPIRAL LATTICE WITH HONEYCOMB CONF
                 (np.array(matrix)[0:,0:]) # nowhere to go
                 break
             
-    matrix=np.array(matrix)
-    mul=int((width/4))
-    l1=[1,0,0,1]*mul
-    l2=[0,1,1,0]*mul
+    matrix=np.array(matrix)    
+    spi_u = matrix[1:,1:]
     
-    l1.append(1)
-    l2.append(0)
-    for i in range(0,height,2):
-        matrix[i,:]=matrix[i,:]*l1
+    auxi = np.zeros((width-1,(width-1)*2))
+    linha = 0
+    coluna = 0
+    count_vec=[0,1,2,3]*int(1+np.shape(auxi)[0]/2)
+    for i in range(np.shape(auxi[:])[0]):
+        count = 0
+        j = 0
+        if i%2==0:
+            while coluna<np.shape(spi_u)[1]:
+                #print(i,j)
+                if count_vec[count]==0:
+                    auxi[i,j] = spi_u[linha,coluna]
+                    coluna+=1
+                if count_vec[count]==1:
+                    auxi[i,j] = 0
+                if count_vec[count]==2:
+                    auxi[i,j] = 0
+                if count_vec[count]==3:
+                    auxi[i,j] = spi_u[linha,coluna]
+                    coluna+=1
+                count+=1
+                j+=1
+        if i%2==1:
+            while coluna<np.shape(spi_u)[1]:
+                if count_vec[count]==0:
+                    auxi[i,j] = 0
+                if count_vec[count]==1:
+                    auxi[i,j] = spi_u[linha,coluna]
+                    coluna+=1
+                if count_vec[count]==2:
+                    auxi[i,j] = spi_u[linha,coluna]
+                    coluna+=1
+                if count_vec[count]==3:
+                    auxi[i,j] = 0    
+                count+=1
+                j+=1
+        coluna=0
+        linha+=1
     
-    for i in range(1,height,2):
-        matrix[i,:]=matrix[i,:]*l2
-    
-    return matrix
+    return auxi
 
 def spiral(width, height): #GENERATE A WIDTH X WIDTH (WIDTH%2==1) LATTICE WITH CLOCKWISE ORIENTATION
                             # 
@@ -223,9 +258,6 @@ def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTO
     num_elem=int(matriz.max())
     matriz=np.array(matriz,dtype=np.int64)
     shape_real=np.shape(matriz)[0]
-    #print(vec)
-    
-    
     
     hamil=np.zeros((num_elem+1,num_elem+1),dtype=np.complex)
     
@@ -239,16 +271,20 @@ def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTO
     locs = np.zeros((int(num_elem/2)+1,3),dtype=np.int64)
     vec=np.transpose(np.nonzero(matriz))
     t=1.0 #hopping
-    st_mod =0.1j*1/(3*np.sqrt(3)) #second hopping
+    st_mod =0.1j/(3*np.sqrt(3)) #second hopping
     #return matrix
-    for i in range(int(num_elem/2)+1):
+    num_elem_real = int(np.shape(vec)[0]/2) #2*(np.shape(matriz)[0]/2)**2
+    #print(num_elem_real)
+    for i in range(int(num_elem_real)):
         lin=vec[i][0]
         col=vec[i][1]
         val=int(matriz[lin,col])
         locs[i,0] = val
         locs[i,1] = lin
         locs[i,2] = col
-                
+        
+        
+ 
         hopps=matriz[lin-1:lin+2,col-1:col+2]
         aft=int(hopps[1,2])
         dia_sup=int(hopps[0,2])
@@ -260,12 +296,11 @@ def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTO
     
     
     count=0
-    for i in range(int(num_elem/2)+1):
+    for i in range(num_elem_real):
         
         lin=vec[i][0]
         col=vec[i][1]
         val=int(matriz[lin,col])        
-        
         if count%2!=0:
             shopps=matriz[lin-2:lin+3,col-2:col+3]
             
@@ -277,11 +312,6 @@ def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTO
             Abelow_left=int(shopps[3,0])
             Abelow_below=int(shopps[-1,2])
         
-        
-            if val==2:
-                print(Aabove_above,Aabove_rigt,Abelow_right,Aabove_left,Abelow_left,Abelow_below)
-                print(shopps)
-                
             if Aabove_above!=0:
                 hamil[val,Aabove_above]=st
             if Aabove_rigt!=0:
@@ -306,12 +336,7 @@ def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTO
             Aabove_left=int(shopps[1,0])
             Abelow_left=int(shopps[3,0])
             Abelow_below=int(shopps[-1,2])
-        
-            
-            if val==11:
-                print(Aabove_above,Aabove_rigt,Abelow_right,Aabove_left,Abelow_left,Abelow_below)
-                print(shopps)
-                
+                        
             if Aabove_above!=0:
                 hamil[val,Aabove_above]=-st
             if Aabove_rigt!=0:
@@ -327,6 +352,7 @@ def hamiltonian_honney(matriz): #TRANSFORM THE HONNEYCOMB LATTICE INTO A HAMILTO
         count+=1    
         
     hamil=np.triu(hamil,k=0)
+    hamil = hamil[1:,1:]
     np.savetxt("localizacao.txt",locs,fmt='%+8s')
     hamil=hamil+np.transpose(np.conj(hamil))
     return hamil
@@ -370,8 +396,26 @@ def hamiltonian_square(matriz): #TRANSFORM THE SQUARE LATTICE INTO A HAMILTONIAN
     hopp=hopp+np.transpose(np.conj(hopp))
     return hopp
 
-spi=spiral_honney(5,5) # GENERATE THE LATTICE
+spi=spiral_honney(29,29) # GENERATE THE LATTICE
 ham=hamiltonian_honney(spi) #TRANSFORM INTO A HAMILTONIAN
+a,b,c,d  = lanczos_sys_sol(ham)
+
+val = np.linalg.eigvalsh(ham)
+
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
 
 
 
